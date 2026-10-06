@@ -1,0 +1,20 @@
+{
+  "name": "monetization-gateway-tools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Interactive Base USDC x402 v2 client for Cloudflare Monetization Gateway",
+  "engines": { "node": ">=22.14.0" },
+  "scripts": {
+    "test": "node --test",
+    "inspect": "node scripts/client.mjs inspect",
+    "pay": "node scripts/client.mjs pay",
+    "wallet": "node scripts/client.mjs wallet"
+  },
+  "dependencies": {
+    "@x402/core": "2.14.0",
+    "@x402/evm": "2.14.0",
+    "undici": "^7.16.0",
+    "viem": "^2.47.11"
+  }
+}

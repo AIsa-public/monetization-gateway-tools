@@ -1,0 +1,5 @@
+{
+  "query": "agent payments",
+  "search_depth": "basic",
+  "max_results": 5
+}
