@@ -54,6 +54,39 @@ Typing `yes` authorizes a real mainnet payment signature, not just a preview.
 The script does not require the buyer to send a gas-paying transaction for this
 EIP-3009 authorization; funding or other wallet transactions are separate.
 
+## Test a search API
+
+YouTube Search is available through these shortcuts (0.004 USDC per request):
+
+```bash
+npm run inspect:search -- --query "agent payments"
+npm run pay:search -- --query "agent payments"
+```
+
+The first command only inspects the 402 challenge. The second asks for terminal
+`yes` before signing and submitting a single paid request. The search response
+is printed under `body`, alongside the payment receipt.
+
+Other search presets:
+
+```bash
+node scripts/client.mjs inspect --api twitter --query "OpenAI"
+node scripts/client.mjs pay --api twitter --query "OpenAI"
+node scripts/client.mjs inspect --api tavily --query "agent payments"
+```
+
+| Preset | Method and path after `/payments/cloudflare/v1/` | Price cap (USDC) |
+| --- | --- | --- |
+| `youtube` | GET `youtube/search?q=...` | 0.004 |
+| `twitter` | GET `twitter/user/search?query=...` | 0.005 |
+| `tavily` | POST `tavily/search` | 0.0144 |
+
+Query text is URL-encoded. Tavily uses a JSON body with basic search and five
+results. Presets cannot be combined with a custom URL or body. Each preset caps
+payment at the listed price, or a lower `MAX_PAYMENT_USDC` if configured.
+An explicit `--max-usdc` overrides that cap. The original `inspect` and `pay`
+npm commands retain their Tavily defaults.
+
 ## Test Tavily
 
 ### 1. Inspect without paying
@@ -145,7 +178,8 @@ Quotes older than five minutes require a new inspection and confirmation.
 ## Results and failure handling
 
 JSON results go to stdout; confirmation and diagnostics go to stderr.
-`body` contains the original response text as an escaped JSON string.
+`body` contains a parsed JSON value when the response is valid JSON, otherwise
+the original response text.
 
 - `receiptConfirmed: true` means the gateway header reports success with a
   Base transaction hash and the matching payer. It is **not** independent

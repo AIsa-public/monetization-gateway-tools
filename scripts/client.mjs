@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { SEARCH_APIS, searchRequest, displayResult, searchPaymentCap } from '../src/search.mjs';
 import { existsSync, readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { createInterface } from 'node:readline/promises';
@@ -16,6 +17,8 @@ Defaults: POST https://api.aisa.one/payments/cloudflare/v1/tavily/search
           {"query":"agent payments","search_depth":"basic","max_results":5}
 
 Options:
+  --api NAME            Search preset: youtube, twitter, tavily (no METHOD URL)
+  --query TEXT          Search text for --api (default: agent payments)
   --body JSON           JSON request body
   --body-file PATH      Read JSON body from a file
   --max-usdc AMOUNT      Per-request cap (default MAX_PAYMENT_USDC or 0.02)
@@ -31,7 +34,7 @@ HTTP(S)_PROXY and NO_PROXY (including lowercase variants) apply to API and RPC.
 async function main() {
   let parsed;
   try { parsed = parseArgs({ allowPositionals: true, options: {
-    help: { type: 'boolean' }, body: { type: 'string' }, 'body-file': { type: 'string' },
+    help: { type: 'boolean' }, api: { type: 'string' }, query: { type: 'string' }, body: { type: 'string' }, 'body-file': { type: 'string' },
     'max-usdc': { type: 'string' }, 'pay-to': { type: 'string' }, 'env-file': { type: 'string' },
   } }); } catch { throw new ClientError('Invalid arguments. Run with --help. Secrets are accepted only through environment variables.'); }
   const { values, positionals } = parsed;
@@ -39,6 +42,8 @@ async function main() {
   const [command, method, url, ...extra] = positionals;
   if (!['inspect', 'pay', 'wallet'].includes(command) || extra.length || Boolean(method) !== Boolean(url)) throw new ClientError('Use inspect/pay [METHOD URL], or wallet. See --help.');
   if (command === 'wallet' && method) throw new ClientError('wallet does not accept an endpoint.');
+  if ((values.api && (url || values.body !== undefined || values['body-file'] !== undefined || command === 'wallet')) || (values.query !== undefined && !values.api)) throw new ClientError('Use --api with optional --query, without METHOD URL or body options.');
+  if (values.api && !Object.hasOwn(SEARCH_APIS, values.api)) throw new ClientError('Choose --api youtube, twitter, or tavily.');
   const envFile = values['env-file'] || '.env';
   if (values['env-file'] && !existsSync(envFile)) throw new ClientError('Requested env file does not exist.');
   if (existsSync(envFile)) {
@@ -59,13 +64,14 @@ async function main() {
     if (values['body-file']) {
       try { body = readFileSync(values['body-file'], 'utf8'); } catch { throw new ClientError('Unable to read body file.'); }
     }
-    const request = paymentRequest({ ...(url ? { url, method } : {}), body });
+    const request = values.api ? searchRequest(values.api, values.query) : paymentRequest({ ...(url ? { url, method } : {}), body });
     const quote = await inspectPayment(request, {
-      maxUSDC: values['max-usdc'] || process.env.MAX_PAYMENT_USDC || '0.02',
+      // Presets cap payment at their published price; a stricter environment cap still applies.
+      maxUSDC: searchPaymentCap(values.api, values['max-usdc'], process.env.MAX_PAYMENT_USDC),
       expectedPayTo: (values['pay-to'] || process.env.EXPECTED_PAY_TO || '').split(',').map(s => s.trim()).filter(Boolean),
     }, fetcher);
     if (quote.kind === 'response') {
-      console.log(JSON.stringify(quote, null, 2));
+      console.log(JSON.stringify(displayResult(quote), null, 2));
       if (quote.status === 403) console.error('403 before signing: inspect the body for visitor-country restrictions or origin authorization errors.');
       if (quote.status >= 400) process.exitCode = 1;
       return;
@@ -88,7 +94,7 @@ async function main() {
         finally { terminal.close(); }
       },
     });
-    console.log(JSON.stringify(result, null, 2));
+    console.log(JSON.stringify(displayResult(result), null, 2));
     if (result.kind === 'paid-response') {
       if (result.receiptConfirmed) console.error('Gateway reports successful settlement. Receipt has not been independently checked on-chain.');
       else console.error('Settlement is not confirmed by a complete valid receipt. Check the wallet and seller logs before another attempt.');

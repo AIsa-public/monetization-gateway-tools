@@ -4,12 +4,16 @@
   "private": true,
   "type": "module",
   "description": "Interactive Base USDC x402 v2 client for Cloudflare Monetization Gateway",
-  "engines": { "node": ">=22.14.0" },
+  "engines": {
+    "node": ">=22.14.0"
+  },
   "scripts": {
     "test": "node --test",
     "inspect": "node scripts/client.mjs inspect",
     "pay": "node scripts/client.mjs pay",
-    "wallet": "node scripts/client.mjs wallet"
+    "wallet": "node scripts/client.mjs wallet",
+    "inspect:search": "node scripts/client.mjs inspect --api youtube",
+    "pay:search": "node scripts/client.mjs pay --api youtube"
   },
   "dependencies": {
     "@x402/core": "2.14.0",
