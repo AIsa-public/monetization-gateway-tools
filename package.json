@@ -13,7 +13,9 @@
     "pay": "node scripts/client.mjs pay",
     "wallet": "node scripts/client.mjs wallet",
     "inspect:search": "node scripts/client.mjs inspect --api youtube",
-    "pay:search": "node scripts/client.mjs pay --api youtube"
+    "pay:search": "node scripts/client.mjs pay --api youtube",
+    "inspect:advertisements": "node scripts/client.mjs inspect POST https://api.aisa.one/payments/cloudflare/v1/advertisements/recommendations --body-file examples/advertisements.json --max-usdc 0.10",
+    "pay:advertisements": "node scripts/client.mjs pay POST https://api.aisa.one/payments/cloudflare/v1/advertisements/recommendations --body-file examples/advertisements.json --max-usdc 0.10"
   },
   "dependencies": {
     "@x402/core": "2.14.0",

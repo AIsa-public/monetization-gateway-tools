@@ -54,6 +54,47 @@ Typing `yes` authorizes a real mainnet payment signature, not just a preview.
 The script does not require the buyer to send a gas-paying transaction for this
 EIP-3009 authorization; funding or other wallet transactions are separate.
 
+## Test the advertisement recommendation demo
+
+From this project directory, using your existing local wallet configuration:
+
+```bash
+npm run inspect:advertisements
+npm run pay:advertisements
+```
+
+Both commands use POST `/payments/cloudflare/v1/advertisements/recommendations`
+and `examples/advertisements.json`. Inspect checks the quote without signing.
+Pay displays the terms and requires terminal `yes` before a single real payment.
+The shortcuts explicitly set `--max-usdc 0.10`, overriding `MAX_PAYMENT_USDC`
+for this invocation only; other commands retain their existing caps. This is
+a maximum, not a forced charge: the gateway quote determines the payment.
+
+Edit the example JSON to change `brandName`, `campaignType` or `campaignBrief`.
+All three must be non-empty strings. Use `campaignType`, not `campaign`.
+The demo always returns the same five-platform fixture, including Facebook;
+ROI, scores and ranking are illustrative and do not depend on these inputs.
+
+After payment, the terminal JSON includes the API response under
+`body.recommendations`, `body.ranking` and `body.topRecommendation`, alongside
+the receipt, HTTP status and request ID. To save that output as valid JSON while
+keeping the interactive confirmation visible, invoke Node directly (npm adds
+its own banners to stdout):
+
+```bash
+node scripts/client.mjs pay POST \
+  'https://api.aisa.one/payments/cloudflare/v1/advertisements/recommendations' \
+  --body-file examples/advertisements.json --max-usdc 0.10 \
+  > /tmp/aisa-advertisements-result.json
+```
+
+This command makes another real request; choose either it or the payment
+shortcut for each test. After completion, open the file to view the business
+response and receipt. It contains campaign results and public payment details,
+not wallet secrets or raw payment signatures. Do not automatically rerun after
+an uncertain payment result. If the server price changes, explicitly adjust
+`--max-usdc` on a direct invocation after reviewing the new quote.
+
 ## Test a search API
 
 YouTube Search is available through these shortcuts (0.004 USDC per request):
