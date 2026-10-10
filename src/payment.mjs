@@ -11,6 +11,22 @@ export const DEFAULT_BODY = '{"query":"agent payments","search_depth":"basic","m
 
 export class ClientError extends Error {}
 export class PaymentUncertainError extends ClientError {}
+export class AP4MPaymentUnsupportedError extends ClientError {
+  constructor(options) {
+    super('AP4M batch-settlement was advertised. This client cannot sign AP4M payments yet; the AP4M SDK/signature specification and payer setup are required. No payment was signed or submitted.');
+    // Diagnostic fields only: never treat these unverified values as payment authority.
+    const text = value => typeof value === 'string' ? value.slice(0, 200) : undefined;
+    this.options = options.slice(0, 10).map(option => ({
+      scheme: text(option.scheme), network: text(option.network), asset: text(option.asset),
+      amountRaw: text(option.amount), payTo: text(option.payTo),
+      ap4m: { bindingVersion: text(option.extra?.ap4m?.bindingVersion),
+        profileContract: text(option.extra?.ap4m?.profileContract),
+        merchantPspId: text(option.extra?.ap4m?.channel?.merchantPspId),
+        merchantId: text(option.extra?.ap4m?.channel?.merchantId),
+        payout: text(option.extra?.ap4m?.channel?.payout) },
+    }));
+  }
+}
 
 export function usdcMicros(value) {
   if (typeof value !== 'string' || !/^(0|[1-9]\d*)(\.\d{1,6})?$/.test(value)) {
@@ -62,9 +78,14 @@ export function selectRequirements(challenge, request, { maxUSDC = '0.02', expec
   if (challenge.resource?.url !== request.url) throw new ClientError('Payment resource URL does not match the requested endpoint.');
   if (expectedPayTo.some(address => !isAddress(address))) throw new ClientError('EXPECTED_PAY_TO must contain valid EVM addresses.');
   const candidates = challenge.accepts.filter(r => r?.scheme === 'exact' && r.network === NETWORK && typeof r.asset === 'string' && r.asset.toLowerCase() === USDC.toLowerCase());
-  if (!candidates.length) throw new ClientError('No supported Base mainnet USDC exact option. Circle batching, Permit2 and other chains are not supported.');
+  if (!candidates.length) {
+    const ap4m = challenge.accepts.filter(r => r?.scheme === 'batch-settlement' && r.extra?.ap4m && typeof r.extra.ap4m === 'object');
+    if (ap4m.length) throw new AP4MPaymentUnsupportedError(ap4m);
+    throw new ClientError('No supported Base mainnet USDC exact option. Circle batching, Permit2 and other chains are not supported.');
+  }
   // Select only the EIP-3009 USDC contract, never a server-supplied Gateway or Permit2 domain.
   const selected = candidates.find(r =>
+    !r.extra?.ap4m &&
     typeof r.amount === 'string' && /^[1-9]\d{0,15}$/.test(r.amount) && BigInt(r.amount) <= cap &&
     isAddress(r.payTo) && !/^0x0{40}$/i.test(r.payTo) &&
     Number.isSafeInteger(r.maxTimeoutSeconds) && r.maxTimeoutSeconds > 0 && r.maxTimeoutSeconds <= 3600 &&

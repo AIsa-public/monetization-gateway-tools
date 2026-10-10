@@ -260,3 +260,32 @@ be tested by the operator after reviewing and approving its terms.
 
 The local `../nanopayment-x402` project was used as a CLI/wallet workflow
 reference. Its Circle-specific signing implementation and deposits are not used.
+
+## AP4M pilot compatibility status
+
+An AP4M-only challenge (`scheme: batch-settlement`, `asset: USD`,
+`payTo: merchant`, `extra.ap4m`) is now recognized explicitly. Run:
+
+```bash
+npm run inspect:advertisements
+```
+
+Inspection prints `supported: false`, `signed: false` and selected public AP4M
+fields for troubleshooting. `amountRaw` is deliberately not labelled USDC:
+AP4M units and funding semantics require its specification. These displayed
+fields are gateway-provided diagnostics, not validated payment instructions.
+
+`pay:advertisements` stops with exit code 1 before loading the wallet, checking
+balance or signing if only AP4M is offered. **AP4M payment signing is not yet
+implemented.** The installed generic batch-settlement SDK expects a different
+channel contract (including receiverAuthorizer and token addresses) and cannot
+be used by simply changing the exact scheme string.
+
+To finish the adapter, obtain the AP4M SDK or payment-signature example, signing
+domain/payload specification, payer registration/funding requirements and
+receipt semantics from the integration partner. Do not substitute USDC for USD
+or sign profileContract as a USDC contract. Source-server acceptance of an AP4M
+PAYMENT-CONTEXT JWT does not make this buyer support AP4M signatures.
+
+If a separate supported exact option is also advertised, the existing price,
+recipient and asset policy applies and the normal terminal `yes` flow remains.

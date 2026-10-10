@@ -123,3 +123,26 @@ test('wallet errors never print secret values', () => {
   assert.throws(() => loadWallet({ X402_PRIVATE_KEY: 'secret-invalid' }), error => !error.message.includes('secret-invalid'));
   assert.throws(() => loadWallet({ OWS_MNEMONIC: 'secret-phrase', X402_PRIVATE_KEY: 'secret-key' }), /only one/);
 });
+
+test('AP4M-only challenge gives diagnostic metadata without exposing arbitrary extensions', async () => {
+  const { AP4MPaymentUnsupportedError } = await import('../src/payment.mjs');
+  const ap4m = { scheme: 'batch-settlement', network: NETWORK, amount: '100000', asset: 'USD', payTo: 'merchant', maxTimeoutSeconds: 60,
+    extra: { secret: 'DO_NOT_DISPLAY', ap4m: { bindingVersion: '1', profileContract: recipient,
+      channel: { merchantPspId: 'psp', merchantId: 'merchant-id', payout: recipient }, secret: 'DO_NOT_DISPLAY' } } };
+  await assert.rejects(quote(challenge({}, ap4m), { maxUSDC: '0.10' }), error => {
+    assert.ok(error instanceof AP4MPaymentUnsupportedError);
+    assert.equal(error.options[0].scheme, 'batch-settlement');
+    assert.equal(error.options[0].amountRaw, '100000');
+    assert.equal(error.options[0].asset, 'USD');
+    assert.equal(error.options[0].ap4m.payout, recipient);
+    assert.ok(!JSON.stringify(error.options).includes('DO_NOT_DISPLAY'));
+    return true;
+  });
+  // Mixed offers can still select the independently supported exact option.
+  const mixed = challenge(); mixed.accepts.unshift(ap4m);
+  assert.equal((await quote(mixed)).terms.scheme, 'exact');
+  // Do not silently strip AP4M bindings from an otherwise exact-looking offer.
+  await assert.rejects(quote(challenge({}, { extra: { ...terms.extra, ap4m: ap4m.extra.ap4m } })));
+  // Resource binding is checked even for a diagnostic-only offer.
+  await assert.rejects(quote(challenge({ resource: { url: 'https://wrong.example' } }, ap4m)), /resource URL/);
+});

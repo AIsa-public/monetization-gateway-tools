@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { createInterface } from 'node:readline/promises';
 import { EnvHttpProxyAgent, fetch as proxyFetch } from 'undici';
-import { ClientError, PaymentUncertainError, paymentRequest, inspectPayment, payOnce, paymentSummary } from '../src/payment.mjs';
+import { ClientError, PaymentUncertainError, AP4MPaymentUnsupportedError, paymentRequest, inspectPayment, payOnce, paymentSummary } from '../src/payment.mjs';
 import { loadWallet, walletBalance } from '../src/wallet.mjs';
 
 const help = `Cloudflare Monetization Gateway client (Base mainnet USDC only)
@@ -65,11 +65,20 @@ async function main() {
       try { body = readFileSync(values['body-file'], 'utf8'); } catch { throw new ClientError('Unable to read body file.'); }
     }
     const request = values.api ? searchRequest(values.api, values.query) : paymentRequest({ ...(url ? { url, method } : {}), body });
-    const quote = await inspectPayment(request, {
+    let quote;
+    try { quote = await inspectPayment(request, {
       // Presets cap payment at their published price; a stricter environment cap still applies.
       maxUSDC: searchPaymentCap(values.api, values['max-usdc'], process.env.MAX_PAYMENT_USDC),
       expectedPayTo: (values['pay-to'] || process.env.EXPECTED_PAY_TO || '').split(',').map(s => s.trim()).filter(Boolean),
-    }, fetcher);
+    }, fetcher); } catch (error) {
+      if (!(error instanceof AP4MPaymentUnsupportedError)) throw error;
+      console.log(JSON.stringify({ endpoint: request.url, method: request.method,
+        paymentRequired: true, supported: false, signed: false,
+        options: error.options, message: error.message }, null, 2));
+      // Stop before wallet loading, balance RPC, approval or signing.
+      if (command === 'pay') process.exitCode = 1;
+      return;
+    }
     if (quote.kind === 'response') {
       console.log(JSON.stringify(displayResult(quote), null, 2));
       if (quote.status === 403) console.error('403 before signing: inspect the body for visitor-country restrictions or origin authorization errors.');
